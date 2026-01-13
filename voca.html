@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>영단어 암기</title>
+  <style>
+    :root{
+      --bg:#f7f7f8;--panel:#fff;--text:#111;--muted:#6b7280;
+      --primary:#2563eb;--danger:#dc2626;--border:#e5e7eb
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI','Noto Sans KR',sans-serif}
+    button,input{font-family:inherit}
+
+    .app{max-width:900px;margin:0 auto;padding:16px}
+    .app-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px}
+    .app-nav{display:flex;gap:8px;flex-wrap:wrap}
+    .nav-btn{padding:8px 14px;border:1px solid var(--border);background:var(--panel);border-radius:8px;cursor:pointer}
+
+    .view{display:none}
+    .view.is-active{display:block}
+
+    .panel{background:var(--panel);border-radius:14px;padding:16px;border:1px solid var(--border)}
+    .form{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+    input{padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-size:16px}
+
+    .primary-btn{background:var(--primary);color:#fff;border:none;padding:12px 16px;border-radius:10px;cursor:pointer;font-size:16px}
+    .ghost-btn{background:transparent;border:1px solid var(--border);padding:12px 16px;border-radius:10px;cursor:pointer;font-size:16px}
+    .small-btn{padding:8px 12px;font-size:14px;cursor:pointer;border-radius:8px}
+
+    /* danger styles */
+    .danger{color:var(--danger);border-color:var(--danger)}
+    .primary-btn.danger{background:var(--danger);color:#fff}
+
+    #vocab-list,.word-list{list-style:none;padding:0;margin:12px 0}
+    .vocab-item,.word-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--border)}
+
+    .study-card{margin-top:16px;padding:20px;border:1px solid var(--border);border-radius:16px;text-align:center}
+    .study-word{font-size:36px;font-weight:700;margin-bottom:14px}
+    .study-meaning{font-size:20px;margin:14px 0}
+    .progress{height:10px;background:var(--border);border-radius:999px;overflow:hidden;margin-top:12px}
+    .progress-bar{height:100%;background:var(--primary);width:0%}
+    .empty{margin-top:12px;color:var(--muted)}
+
+    /* modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px}
+    .modal-backdrop.show{display:flex}
+    .modal{background:#fff;border-radius:16px;padding:20px;min-width:260px;max-width:520px;width:100%;border:1px solid var(--border)}
+    .modal h3{margin:0 0 10px;font-size:18px}
+    .modal p{margin:0;font-size:15px;white-space:pre-line}
+    .modal input{margin-top:12px;width:100%;font-size:16px}
+    .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+
+    /* ===== mobile ===== */
+    @media (max-width: 600px){
+      .app{padding:12px}
+      .app-header{flex-direction:column;align-items:stretch;gap:10px}
+      .app-nav{justify-content:space-between}
+      .nav-btn{flex:1}
+
+      .vocab-item,.word-row{flex-direction:column;align-items:stretch}
+      .vocab-item span,.word-row span{display:flex;justify-content:space-between}
+
+      .study-word{font-size:32px}
+      .study-meaning{font-size:18px}
+
+      .modal-actions{flex-direction:column}
+      .modal-actions button{width:100%}
+    }
+  </style>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <h1>영단어 암기</h1>
+    <nav class="app-nav">
+      <button class="nav-btn" type="button" onclick="showView('home')">홈</button>
+      <button class="nav-btn" type="button" onclick="showView('manage')">관리</button>
+      <button class="nav-btn" type="button" onclick="showView('study')">학습</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-home" class="view is-active">
+      <div class="panel">
+        <h2>단어장</h2>
+        <ul id="vocab-list"></ul>
+        <input id="new-vocab" placeholder="새 단어장 이름" />
+        <button class="primary-btn" type="button" onclick="addVocab()">단어장 추가</button>
+      </div>
+    </section>
+
+    <section id="view-manage" class="view">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <h2 id="current-vocab-title" style="margin:0"></h2>
+          <div style="display:flex;gap:8px">
+            <button class="small-btn" type="button" onclick="renameVocab()">이름 변경</button>
+            <button class="small-btn danger" type="button" onclick="askDeleteVocab()">단어장 삭제</button>
+          </div>
+        </div>
+
+        <form id="form-word" class="form">
+          <input id="word" placeholder="영단어" />
+          <input id="meaning" placeholder="뜻" />
+          <input type="hidden" id="edit-id" />
+          <button class="primary-btn" type="submit">저장</button>
+        </form>
+
+        <ul id="word-list" class="word-list"></ul>
+        <div id="manage-empty" class="empty" hidden>아직 단어가 없어요.</div>
+      </div>
+    </section>
+
+    <section id="view-study" class="view">
+      <div class="panel">
+        <h2>학습</h2>
+        <div class="progress"><div id="progress" class="progress-bar"></div></div>
+        <div class="study-card">
+          <div id="study-word" class="study-word"></div>
+          <div id="study-meaning" class="study-meaning" hidden></div>
+          <button class="ghost-btn" type="button" onclick="toggleMeaning()">뜻 보기</button>
+          <div style="margin-top:10px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap">
+            <button class="primary-btn" type="button" onclick="mark(true)">외웠음</button>
+            <button class="ghost-btn" type="button" onclick="mark(false)">모르겠음</button>
+          </div>
+          <div id="study-empty" class="empty" hidden>학습할 단어가 없어요.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- modal -->
+<div id="modal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h3 id="modal-title">확인</h3>
+    <p id="modal-message"></p>
+    <input id="modal-input" style="display:none" />
+    <div class="modal-actions">
+      <button class="ghost-btn" type="button" onclick="closeModal()">취소</button>
+      <button class="primary-btn" type="button" id="modal-confirm">확인</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // =========================
+  // PWA: service worker
+  // =========================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(console.error);
+    });
+  }
+
+
+  // =========================
+  // utils
+  // =========================
+  function safeParse(raw, fallback) {
+    try {
+      const v = JSON.parse(raw);
+      return v ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  // XSS/마크업 깨짐 방지용 (렌더링에 사용)
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function makeId() {
+    return (crypto?.randomUUID?.() ?? (String(Date.now()) + '_' + Math.random().toString(16).slice(2)));
+  }
+
+  // =========================
+  // data
+  // =========================
+  let data = safeParse(localStorage.getItem('vocabs') || '[]', []);
+  if (!Array.isArray(data)) data = [];
+
+  // 데이터 정리 + 마이그레이션 (word.lastSeen 포함)
+  data = data
+    .map(v => ({
+      id: String(v?.id ?? ''),
+      title: String(v?.title ?? ''),
+      words: Array.isArray(v?.words)
+        ? v.words.map(w => ({
+          id: String(w?.id ?? ''),
+          word: String(w?.word ?? ''),
+          meaning: String(w?.meaning ?? ''),
+          score: Number(w?.score ?? 0),
+          lastSeen: Number(w?.lastSeen ?? 0)
+        }))
+        : []
+    }))
+    .filter(v => v.id && v.title);
+
+  let currentVocabId = null;
+  let currentIndex = 0;
+  let studyQueue = [];
+
+  const save = () => localStorage.setItem('vocabs', JSON.stringify(data));
+  const getCur = () => data.find(v => v.id === currentVocabId) || null;
+
+  // =========================
+  // nav
+  // =========================
+  function showView(v) {
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('is-active'));
+    const target = document.getElementById('view-' + v);
+    if (target) target.classList.add('is-active');
+
+    if (v === 'home') renderVocabs();
+    if (v === 'manage') renderWords();
+    if (v === 'study') startStudy();
+  }
+
+  // =========================
+  // modal (reusable)
+  // =========================
+  const modal = document.getElementById('modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalMsg = document.getElementById('modal-message');
+  const modalInput = document.getElementById('modal-input');
+  const modalConfirm = document.getElementById('modal-confirm');
+
+  let modalAction = null;
+
+  function openModal({
+    title = '확인',
+    message = '',
+    confirmText = '확인',
+    danger = false,
+    input = false,
+    inputValue = '',
+    onConfirm
+  }) {
+    modalTitle.textContent = title;
+    modalMsg.textContent = message;
+
+    modalConfirm.textContent = confirmText;
+    modalConfirm.classList.toggle('danger', !!danger);
+
+    if (input) {
+      modalInput.style.display = 'block';
+      modalInput.value = inputValue;
+    } else {
+      modalInput.style.display = 'none';
+      modalInput.value = '';
+    }
+
+    modalAction = () => onConfirm?.(modalInput.value);
+
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+
+    setTimeout(() => {
+      if (input) modalInput.focus();
+      else modalConfirm.focus();
+    }, 0);
+  }
+
+  function closeModal() {
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    modalAction = null;
+  }
+
+  modalConfirm.addEventListener('click', () => {
+    if (modalAction) modalAction();
+    closeModal();
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!modal.classList.contains('show')) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeModal();
+    }
+
+    if (e.key === 'Enter' && modalInput.style.display === 'block') {
+      e.preventDefault();
+      if (modalAction) modalAction();
+      closeModal();
+    }
+  });
+
+  // =========================
+  // vocab
+  // =========================
+  function renderVocabs() {
+    const ul = document.getElementById('vocab-list');
+    ul.innerHTML = '';
+
+    if (!data.length) {
+      ul.innerHTML = '<li class="empty">없음</li>';
+      return;
+    }
+
+    data.forEach(v => {
+      const li = document.createElement('li');
+      li.className = 'vocab-item';
+      li.innerHTML = `
+        <strong>${escapeHtml(v.title)}</strong>
+        <span style="display:flex;gap:8px">
+          <button class="small-btn" type="button" onclick="openVocab('${v.id}')">열기</button>
+          <button class="small-btn danger" type="button" onclick="askDeleteVocab('${v.id}')">삭제</button>
+        </span>
+      `;
+      ul.appendChild(li);
+    });
+  }
+
+  function addVocab() {
+    const t = document.getElementById('new-vocab').value.trim();
+    if (!t) return;
+
+    const id = makeId();
+    data.push({ id: String(id), title: t, words: [] });
+    save();
+
+    document.getElementById('new-vocab').value = '';
+    renderVocabs();
+  }
+
+  function openVocab(id) {
+    currentVocabId = String(id);
+    currentIndex = 0;
+    showView('manage');
+  }
+
+  function askDeleteVocab(id = currentVocabId) {
+    if (!id) return;
+
+    openModal({
+      title: '단어장 삭제',
+      message: '이 단어장을 삭제할까요?\n(복구 불가)',
+      confirmText: '삭제',
+      danger: true,
+      onConfirm: () => {
+        data = data.filter(v => v.id !== String(id));
+        if (currentVocabId === String(id)) currentVocabId = null;
+        save();
+        showView('home');
+      }
+    });
+  }
+
+  function renameVocab() {
+    const cur = getCur();
+    if (!cur) return;
+
+    openModal({
+      title: '단어장 이름 변경',
+      message: '새 단어장 이름을 입력하세요.',
+      confirmText: '변경',
+      input: true,
+      inputValue: cur.title,
+      onConfirm: (val) => {
+        const name = String(val ?? '').trim();
+        if (!name) return;
+        cur.title = name;
+        save();
+        renderWords();
+        renderVocabs();
+      }
+    });
+  }
+
+  // =========================
+  // words
+  // =========================
+  function renderWords() {
+    const ul = document.getElementById('word-list');
+    const cur = getCur();
+    ul.innerHTML = '';
+
+    if (!cur) {
+      document.getElementById('current-vocab-title').textContent = '';
+      document.getElementById('manage-empty').hidden = false;
+      return;
+    }
+
+    document.getElementById('current-vocab-title').textContent = cur.title;
+
+    if (!cur.words.length) {
+      document.getElementById('manage-empty').hidden = false;
+      return;
+    }
+
+    document.getElementById('manage-empty').hidden = true;
+
+    cur.words.forEach(w => {
+      const li = document.createElement('li');
+      li.className = 'word-row';
+      li.innerHTML = `
+        <span>${escapeHtml(w.word)} - ${escapeHtml(w.meaning)}</span>
+        <span style="display:flex;gap:8px">
+          <button class="small-btn" type="button" onclick="editWord('${w.id}')">수정</button>
+          <button class="small-btn danger" type="button" onclick="askDeleteWord('${w.id}')">삭제</button>
+        </span>
+      `;
+      ul.appendChild(li);
+    });
+  }
+
+  function editWord(id) {
+    const cur = getCur();
+    if (!cur) return;
+    const w = cur.words.find(x => x.id === String(id));
+    if (!w) return;
+
+    document.getElementById('word').value = w.word;
+    document.getElementById('meaning').value = w.meaning;
+    document.getElementById('edit-id').value = String(id);
+  }
+
+  function askDeleteWord(id) {
+    openModal({
+      title: '단어 삭제',
+      message: '이 단어를 삭제할까요?',
+      confirmText: '삭제',
+      danger: true,
+      onConfirm: () => {
+        const cur = getCur();
+        if (!cur) return;
+        cur.words = cur.words.filter(w => w.id !== String(id));
+        save();
+        renderWords();
+      }
+    });
+  }
+
+  document.getElementById('form-word').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const cur = getCur();
+    if (!cur) return;
+
+    const word = document.getElementById('word').value.trim();
+    const meaning = document.getElementById('meaning').value.trim();
+    if (!word || !meaning) return;
+
+    const eid = document.getElementById('edit-id').value;
+
+    if (eid) {
+      const t = cur.words.find(x => x.id === String(eid));
+      if (t) {
+        t.word = word;
+        t.meaning = meaning;
+      }
+    } else {
+      cur.words.push({ id: makeId(), word, meaning, score: 0, lastSeen: 0 });
+    }
+
+    save();
+    e.target.reset();
+    document.getElementById('edit-id').value = '';
+    renderWords();
+    renderVocabs();
+  });
+
+  // =========================
+  // study (adaptive order)
+  // =========================
+  // 순서 알고리즘:
+  // - score 낮은 단어 우선
+  // - 오래 안 본 단어 우선
+  // - 고정 순서가 아니라 가중 랜덤 셔플
+
+  function getStudyQueue() {
+    const cur = getCur();
+    if (!cur) return [];
+
+    const now = Date.now();
+    const weighted = cur.words.map(w => {
+      const score = Number(w.score || 0); // 0-2
+      const lastSeen = Number(w.lastSeen || 0);
+      const age = Math.max(1, now - lastSeen);
+
+      const scoreWeight = score === 0 ? 3 : score === 1 ? 2 : 1;
+      const timeWeight = Math.min(3, Math.log10(age));
+
+      return { w, weight: scoreWeight + timeWeight };
+    });
+
+    const queue = [];
+    while (weighted.length) {
+      const total = weighted.reduce((s, x) => s + x.weight, 0);
+      let r = Math.random() * total;
+      let idx = 0;
+      for (; idx < weighted.length; idx++) {
+        r -= weighted[idx].weight;
+        if (r <= 0) break;
+      }
+      queue.push(weighted[idx].w);
+      weighted.splice(idx, 1);
+    }
+    return queue;
+  }
+
+  function startStudy() {
+    // 선택된 단어장이 없으면 빈 상태
+    studyQueue = getStudyQueue();
+    currentIndex = 0;
+    showCard();
+  }
+
+  function showCard() {
+    const empty = document.getElementById('study-empty');
+
+    if (!studyQueue.length) {
+      empty.hidden = false;
+      document.getElementById('study-word').textContent = '';
+      document.getElementById('study-meaning').textContent = '';
+      document.getElementById('study-meaning').hidden = true;
+      document.getElementById('progress').style.width = '0%';
+      return;
+    }
+
+    empty.hidden = true;
+
+    if (currentIndex >= studyQueue.length) currentIndex = 0;
+    const w = studyQueue[currentIndex];
+
+    document.getElementById('study-word').textContent = w.word;
+    document.getElementById('study-meaning').textContent = w.meaning;
+    document.getElementById('study-meaning').hidden = true;
+
+    document.getElementById('progress').style.width = ((currentIndex + 1) / studyQueue.length * 100) + '%';
+  }
+
+  function toggleMeaning() {
+    if (!studyQueue.length) return;
+    const el = document.getElementById('study-meaning');
+    el.hidden = !el.hidden;
+  }
+
+  function mark(k) {
+    if (!studyQueue.length) return;
+
+    const w = studyQueue[currentIndex];
+    const s = Number(w.score || 0);
+    w.score = k ? Math.min(2, s + 1) : 0;
+    w.lastSeen = Date.now();
+
+    save();
+
+    currentIndex++;
+    if (currentIndex >= studyQueue.length) {
+      studyQueue = getStudyQueue();
+      currentIndex = 0;
+    }
+    showCard();
+  }
+
+  // =========================
+  // minimal tests (manual: ?test=1)
+  // =========================
+  (function runTestsIfNeeded(){
+    const p = new URLSearchParams(location.search);
+    if (p.get('test') !== '1') return;
+
+    const assert = (cond, msg) => {
+      if (!cond) throw new Error('TEST FAIL: ' + msg);
+      console.log('PASS:', msg);
+    };
+
+    // utils
+    assert(typeof escapeHtml === 'function', 'escapeHtml exists');
+    assert(escapeHtml('<b>') === '&lt;b&gt;', 'escapeHtml escapes <>');
+
+    // modal should be callable
+    assert(typeof openModal === 'function', 'openModal exists');
+    assert(typeof askDeleteVocab === 'function', 'askDeleteVocab exists');
+    assert(typeof askDeleteWord === 'function', 'askDeleteWord exists');
+
+    // seed data
+    data = [{
+      id: 'v1',
+      title: '테스트',
+      words: [
+        { id: 'w1', word: 'apple', meaning: '사과', score: 0, lastSeen: 0 },
+        { id: 'w2', word: 'banana', meaning: '바나나', score: 2, lastSeen: 0 }
+      ]
+    }];
+    currentVocabId = 'v1';
+
+    renderWords();
+    assert(document.querySelectorAll('.word-row').length === 2, 'renderWords creates rows');
+
+    // delete word via logic
+    const cur = getCur();
+    cur.words = cur.words.filter(w => w.id !== 'w1');
+    assert(cur.words.length === 1, 'word deletion filter works');
+
+    // study queue should be same length as words
+    studyQueue = getStudyQueue();
+    assert(studyQueue.length === getCur().words.length, 'getStudyQueue length matches');
+
+    // showCard should not throw
+    currentIndex = 0;
+    showCard();
+    assert(typeof document.getElementById('study-word').textContent === 'string', 'showCard writes study-word');
+
+    console.log('ALL TESTS PASSED');
+  })();
+
+  // expose for inline handlers
+  window.showView = showView;
+  window.addVocab = addVocab;
+  window.openVocab = openVocab;
+  window.askDeleteVocab = askDeleteVocab;
+  window.renameVocab = renameVocab;
+  window.editWord = editWord;
+  window.askDeleteWord = askDeleteWord;
+  window.toggleMeaning = toggleMeaning;
+  window.mark = mark;
+  window.closeModal = closeModal;
+
+  // init
+  renderVocabs();
+</script>
+</body>
+</html>
