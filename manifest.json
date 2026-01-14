@@ -1,8 +1,10 @@
 {
   "name": "영단어 암기",
   "short_name": "단어암기",
-  "start_url": ".",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone"],
   "background_color": "#f7f7f8",
   "theme_color": "#2563eb",
   "icons": [
